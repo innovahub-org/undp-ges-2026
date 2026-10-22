@@ -41,6 +41,15 @@ html = html
   .replace(/(["'(\s])\/(_next\/|brand\/|icon\.svg|favicon\.ico|apple-icon\.png)/g, '$1./$2')
   .replace(/(\\")\/(_next\/|brand\/|icon\.svg|favicon\.ico|apple-icon\.png)/g, '$1./$2')
   .replace(/\?dpl=dpl_[A-Za-z0-9]+/g, '');
+
+// Header brand (logo + title) links to undp.org instead of back to top. It is a client component, so the
+// same change is made in its JS chunk below.
+const BRAND_LABEL = 'UNDP Global Gender Equality Strategy 2026–2029, back to top';
+const BRAND_NEW_LABEL = 'United Nations Development Programme website (undp.org)';
+const brandHtml = `<a href="#top" class="lnUIdW_brand" aria-label="${BRAND_LABEL}">`;
+if (!html.includes(brandHtml)) throw new Error('Header brand link not found in HTML');
+html = html.replace(brandHtml, `<a href="https://www.undp.org/" class="lnUIdW_brand" aria-label="${BRAND_NEW_LABEL}">`);
+
 // Download dialog: replace the single CMS item with every file listed in downloads/downloads.json.
 // The item exists twice (server HTML and React payload); both must match or React re-renders the old list.
 const DL_SRC = path.join(path.dirname(RAW), 'downloads');
@@ -98,7 +107,9 @@ for (const f of await fs.readdir(chunkDir)) {
   js = js
     .replace(/(path:"\/_next\/image",loader:"default",[^}]*?)unoptimized:!1/g, '$1unoptimized:!0')
     .replace(/unoptimized:!1\}/g, 'unoptimized:!0}')
-    .replace(/"\/brand\//g, '"./brand/');
+    .replace(/"\/brand\//g, '"./brand/')
+    .replace(`{href:"#top",className:i.default.brand,"aria-label":"${BRAND_LABEL}"`,
+      `{href:"https://www.undp.org/",className:i.default.brand,"aria-label":"${BRAND_NEW_LABEL}"`);
   if (js !== before) { await fs.writeFile(p, js); console.log('patched', f); }
 }
 
