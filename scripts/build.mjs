@@ -55,10 +55,14 @@ for (const d of downloads) {
   await fs.copyFile(path.join(DL_SRC, d.file), path.join(OUT, 'assets/downloads', d.file));
   const size = ((await fs.stat(path.join(DL_SRC, d.file))).size / 1048576).toFixed(1);
   const href = 'assets/downloads/' + d.file;
+  // Saved file name shown to the visitor, e.g. "Summary version (EN).pdf".
+  const saveAs = `${d.label} (${d.language}).pdf`;
   htmlItems.push(htmlItem.split(oldHref).join(href)
+    .replace('download=""', `download="${saveAs}"`)
     .replace(/(kGdWoq_label">)[^<]*(<!-- --> )\([^)]*\)/, `$1${d.label}$2(${d.language})`)
     .replace(/(kGdWoq_meta">PDF<!-- --> )\([^)]*\)/, `$1(${size} MB)`));
   rscItems.push(rscItem.split(oldHref).join(href)
+    .replace('\\"download\\":true', `\\"download\\":\\"${saveAs}\\"`)
     .replace(/(\\"kGdWoq_label\\",\\"children\\":\[\\")[^\\]*(\\",\\" )\([^)]*\)/, `$1${d.label}$2(${d.language})`)
     .replace(/(\\"PDF\\",\\" )\([^)]*\)/, `$1(${size} MB)`));
 }
