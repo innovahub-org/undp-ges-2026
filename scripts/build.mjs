@@ -41,6 +41,29 @@ html = html
   .replace(/(["'(\s])\/(_next\/|brand\/|icon\.svg|favicon\.ico|apple-icon\.png)/g, '$1./$2')
   .replace(/(\\")\/(_next\/|brand\/|icon\.svg|favicon\.ico|apple-icon\.png)/g, '$1./$2')
   .replace(/\?dpl=dpl_[A-Za-z0-9]+/g, '');
+// Download dialog: replace the single CMS item with every file listed in downloads/downloads.json.
+// The item exists twice (server HTML and React payload); both must match or React re-renders the old list.
+const DL_SRC = path.join(path.dirname(RAW), 'downloads');
+const downloads = JSON.parse(await fs.readFile(path.join(DL_SRC, 'downloads.json'), 'utf8'));
+await fs.mkdir(path.join(OUT, 'assets/downloads'), { recursive: true });
+const htmlItem = html.match(/<li><a class="kGdWoq_item".*?<\/a><\/li>/)[0];
+const rscItem = html.match(/\[\\"\$\\",\\"li\\",\\"[^\\]+\\",\{\\"children\\":\[\\"\$\\",\\"a\\",null,\{\\"className\\":\\"kGdWoq_item\\".*?triggerIcon\\"\}\]\]\}\]\}\]/)[0];
+const oldHref = htmlItem.match(/href="([^"]+)"/)[1];
+const htmlItems = [];
+const rscItems = [];
+for (const d of downloads) {
+  await fs.copyFile(path.join(DL_SRC, d.file), path.join(OUT, 'assets/downloads', d.file));
+  const size = ((await fs.stat(path.join(DL_SRC, d.file))).size / 1048576).toFixed(1);
+  const href = 'assets/downloads/' + d.file;
+  htmlItems.push(htmlItem.split(oldHref).join(href)
+    .replace(/(kGdWoq_label">)[^<]*(<!-- --> )\([^)]*\)/, `$1${d.label}$2(${d.language})`)
+    .replace(/(kGdWoq_meta">PDF<!-- --> )\([^)]*\)/, `$1(${size} MB)`));
+  rscItems.push(rscItem.split(oldHref).join(href)
+    .replace(/(\\"kGdWoq_label\\",\\"children\\":\[\\")[^\\]*(\\",\\" )\([^)]*\)/, `$1${d.label}$2(${d.language})`)
+    .replace(/(\\"PDF\\",\\" )\([^)]*\)/, `$1(${size} MB)`));
+}
+html = html.replace(htmlItem, htmlItems.join('')).replace(rscItem, rscItems.join(','));
+
 // Turbopack loads lazy chunks from "/_next/" unless told otherwise.
 html = html.replace('<head>', '<head><script>var TURBOPACK_CHUNK_BASE_PATH="./_next/";</script>');
 await fs.writeFile(path.join(OUT, 'index.html'), html);
