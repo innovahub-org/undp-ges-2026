@@ -68,9 +68,25 @@ for (const d of downloads) {
 }
 html = html.replace(htmlItem, htmlItems.join('')).replace(rscItem, rscItems.join(','));
 
+// Google Tag Manager: UNDP requires the standard snippet in <head>. The Next.js build injects it with
+// <Script strategy="afterInteractive"> instead, so drop that element from the React payload (to avoid
+// loading GTM twice) and write the snippet statically, without whitespace between nodes (React hydrates
+// <head> and treats stray text nodes as a mismatch). The <noscript> part is already right after <body>.
+const gtmRsc = /,\[\\"\$\\",\\"\$L\w+\\",null,\{\\"id\\":\\"gtm\\".*?GTM-MRJBL39'\);\\"\}\]/;
+if (!gtmRsc.test(html)) throw new Error('GTM <Script> element not found in the React payload');
+html = html.replace(gtmRsc, '');
+const gtmHead = `<!-- Google Tag Manager --><script>(function (w, d, s, l, i) { w[l] = w[l] || []; w[l].push({ 'gtm.start': new Date().getTime(), event: 'gtm.js' }); var f = d.getElementsByTagName(s)[0], j = d.createElement(s), dl = l != 'dataLayer' ? '&l=' + l : ''; j.async = true; j.src = 'https://www.googletagmanager.com/gtm.js?id=' + i + dl; f.parentNode.insertBefore(j, f); })(window, document, 'script', 'dataLayer', 'GTM-MRJBL39');</script><!-- End Google Tag Manager -->`;
+
 // Turbopack loads lazy chunks from "/_next/" unless told otherwise.
-html = html.replace('<head>', '<head><script>var TURBOPACK_CHUNK_BASE_PATH="./_next/";</script>');
+// Both go right after the charset/viewport metas, as high in <head> as possible.
+const headMetas = html.match(/<head><meta charSet="utf-8"\/><meta name="viewport"[^>]*\/>/)[0];
+html = html.replace(headMetas, `${headMetas}${gtmHead}<script>var TURBOPACK_CHUNK_BASE_PATH="./_next/";</script>`);
 await fs.writeFile(path.join(OUT, 'index.html'), html);
+
+// Hero "Download" button: the icon box is 12px tall but the arrow drawing is 17px, so it was centred too
+// high and the hover animation reached the button border. Size the box to the drawing and clip to the button.
+const heroCss = path.join(OUT, '_next/static/immutable/chunks/3-onadb4gaczo.css');
+await fs.appendFile(heroCss, '\n._w2HtG_download{overflow:hidden}._w2HtG_download .dl-icon{height:17px}\n');
 
 // 3. JS: serve images as-is (no /_next/image optimizer on a static host) and fix root-relative public assets.
 const chunkDir = path.join(OUT, '_next/static/immutable/chunks');
