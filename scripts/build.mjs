@@ -12,7 +12,16 @@ await fs.rm(OUT, { recursive: true, force: true });
 await fs.cp(RAW, OUT, { recursive: true });
 
 // 1. Download the CMS (Sanity) media and the social preview image so nothing depends on external hosts.
+// Files already fetched once are kept in <raw>/_remote, so the build no longer depends on the Vercel preview.
+const CACHE = path.join(RAW, '_remote');
+await fs.rm(path.join(OUT, '_remote'), { recursive: true, force: true });
 async function download(url, dest) {
+  const cached = path.join(CACHE, path.basename(dest));
+  try {
+    await fs.mkdir(path.dirname(dest), { recursive: true });
+    await fs.copyFile(cached, dest);
+    return;
+  } catch {}
   const res = await fetch(url, { headers: { 'user-agent': 'Mozilla/5.0' } });
   if (!res.ok) throw new Error(`${res.status} ${url}`);
   await fs.mkdir(path.dirname(dest), { recursive: true });
@@ -41,6 +50,25 @@ html = html
   .replace(/(["'(\s])\/(_next\/|brand\/|icon\.svg|favicon\.ico|apple-icon\.png)/g, '$1./$2')
   .replace(/(\\")\/(_next\/|brand\/|icon\.svg|favicon\.ico|apple-icon\.png)/g, '$1./$2')
   .replace(/\?dpl=dpl_[A-Za-z0-9]+/g, '');
+
+// Search engines: the Vercel preview was marked noindex. Only the official domain may be indexed; copies on
+// other hosts (github.io previews) keep noindex so they never compete with it in search results.
+const PROD_URL = 'https://genderequalitystrategy.undp.org';
+if (BASE_URL === PROD_URL) {
+  const robotsHtml = '<meta name="robots" content="noindex, nofollow"/>';
+  const robotsRsc = '\\"name\\":\\"robots\\",\\"content\\":\\"noindex, nofollow\\"';
+  if (!html.includes(robotsHtml) || !html.includes(robotsRsc)) throw new Error('robots meta not found');
+  html = html.replace(robotsHtml, '<meta name="robots" content="index, follow"/>')
+    .replace(robotsRsc, '\\"name\\":\\"robots\\",\\"content\\":\\"index, follow\\"');
+  const today = new Date().toISOString().slice(0, 10);
+  await fs.writeFile(path.join(OUT, 'robots.txt'), `User-agent: *\nAllow: /\n\nSitemap: ${PROD_URL}/sitemap.xml\n`);
+  await fs.writeFile(path.join(OUT, 'sitemap.xml'), `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>${PROD_URL}/</loc><lastmod>${today}</lastmod><priority>1.0</priority></url>
+  <url><loc>${PROD_URL}/2022-2025/</loc><priority>0.3</priority></url>
+</urlset>
+`);
+}
 
 // Header brand (logo + title) links to undp.org instead of back to top. It is a client component, so the
 // same change is made in its JS chunk below.
